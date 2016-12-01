@@ -41,8 +41,7 @@ Testing:
    predicts the topics of the missing word.By doing this the alogorthms learn with what so ever less 
    information it has. This methode gets better when the more number of documents. The algorithms needs 
    very little concrete information to build upon.
-.) The final output give with the algorithm acuuracy over the topics, confusion matrix and the algorithm 
-   accuracy.
+.) The final output give with the confusion matrix and the algorithm accuracy.
 
 
 Assumptions:
@@ -149,14 +148,6 @@ def test(Data_Directory):
 					index=Topics.index(topic_temp)
 					Confusion_Matrix[topic][index]+=1
 
-	print "\n\n\nTopic Wise Accuracy\n"
-	print "Topics                   Algorithm Accuracy Per Topic"
-	K=0
-	accuracy=0
-	for topic in Topics:
-		print str(topic)+" "*(14-len(topic))+"                "+str((Algorithm_Docs_Count[K]/float(Ground_No_Of_Docs[topic]))*100)+" %"
-		accuracy=accuracy+(Algorithm_Docs_Count[K]/float(Ground_No_Of_Docs[topic]))*100
-		K+=1
 
 	print "\n\n\nConfusion Matrix\n"
 	print "Predicted - "+" ".join(Topics) +"\n"
