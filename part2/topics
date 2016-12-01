@@ -1,0 +1,272 @@
+#!/usr/bin/python
+
+'''
+Description of problem formulation, approach and programming methodologies
+
+Training:
+
+.) The Train() function is given with the Data directory path and a fraction.
+.) The algorithm loads the sub-folders in the train folder.
+.) The algorithms filps a coin. 1 will be considered as "Yes" and the file is accessed
+   as per the fraction. 0 is considered as "No" and the file is accessed in a fully suprivised mode.
+              The number of lines that each document has is calculated and the fraction is multipled,
+    to get the percentage of information(lines) that the algorithm can access.
+.) Each word is associated with a list of length 20, which is intialised to zero.
+.) The stucture "DATA" holds all the words.
+.) The list "Topics" contatins list of all the topics which are in a fixed order and is used throught
+   this process.
+.) The occurrence of a word (No duplicates) in a document is considered over all the documents within 
+   the topic. Which is the divided by the number of documnets in the topics and multiplied with the
+   topic probability over entier documents.
+.) During the filter process, topics with high rate of occurrence over the entier doucuments are removed
+   from the "DATA". This allows to acces some distinct set of words that are associated with the topics.
+   Removing the words using predefined Stopwords results in lose of useful information and lowers the 
+   accuracy rate. So we have set a parameter of 80 after analyzing some of the redundent words such as
+   'From:' 'Subject:' 'Keyword:' and also by analyzing the uniques words associated with topics.
+.) The model-file is stuctured in such a way that it can be viewed as a matrix with words along the row
+   and topics along the colomn.
+.) The distinctive_words.txt contains the 10 distict words associated with each of the topics. Analyzing 
+   these words was very helpfull in filtering out the unwanted words and to gain a much higher accuracy. 
+
+
+Testing:
+
+.) The test() function is gien with the Data directoy path.
+.) The alogorithm loads the information from the model-file.
+.) The "Topics" and "DATA" paprameter are loaded similar to the training mode.
+.) In order to handel the missing words i.e., the words that are not present in the trained DATA, we have
+   come up heuristic where the algorithms learns about a word based on its previous words in a documents.
+           This is document specific, We have set a window of 40 or less words which acts as a FIFO Queue, 
+   where the algorithms calulates the MODE (statistics) of the all the words assigned to the topics and 
+   predicts the topics of the missing word.By doing this the alogorthms learn with what so ever less 
+   information it has. This methode gets better when the more number of documents. The algorithms needs 
+   very little concrete information to build upon.
+.) The final output give with the algorithm acuuracy over the topics, confusion matrix and the algorithm 
+   accuracy.
+
+
+Assumptions:
+
+.) During the training mode, I have added a fraction of 0.00001 to the given fration, if it is fully
+   unsuprivised i.e., when the given fraction is zero.
+
+
+Result:
+                           Algorithm Accuracy
+
+Fully suprivised (1):           87.24% 
+Semi suprivised (0.5):          86.61%
+Low (0.1):                      82.91%       
+Unsuprivised (0.00001):         81.63%
+
+The test mode approximatly takes 1m 30s.
+
+'''
+
+import sys
+import os
+import re
+import random
+from decimal import Decimal
+
+def test(Data_Directory):
+	Ground_truth,Classification,DATA,Ground_No_Of_Docs,Confusion_Matrix={},{},{},{},{}
+	Current_Top_Index=[]
+	Algorithm_Docs_Count=[0 for x in range(20)]
+	f=open('model-file','r')
+
+	print "Loading model..!"
+	Topics=f.readline().replace("\n"," ").split(" ")
+	Topics.pop()
+
+	contents=f.readlines()
+	for x in contents:
+		Word=x.replace("\n"," ").split(" ")
+		Word.pop()
+		DATA[Word[0]]=[float(z) for z in Word[1:]]
+
+	for z in Topics:
+		Ground_truth[z]=[]
+		Classification[z]=[]
+		Confusion_Matrix[z]=[int(0) for x in range(20)]
+
+	print "Learning model..!"
+	Topics_Path=[names[0] for names in os.walk(os.path.join(Data_Directory,Mode))]
+	for path in Topics_Path[1:]:
+		[Document_ID for Document_ID in os.walk(path)]
+		for ID in Document_ID[2]:
+			Ground_truth[path.split('/').pop()].append(ID)
+		Ground_No_Of_Docs[path.split('/').pop()]=int(len(Ground_truth[path.split('/').pop()]))
+
+	Topics_Path=[names[0] for names in os.walk(Mode)]
+	for path in Topics_Path[1:]:
+		[Document_ID for Document_ID in os.walk(path)]
+		for ID in Document_ID[2]:
+			count=[0 for x in range(20)]
+			Temp=[]
+			Document_F=open(os.path.join(path,ID), "r")
+			contents=Document_F.readlines()
+
+			for i in range(len(contents)):
+				Temp.extend(contents[i].split())
+			Temp=list(set(Temp))
+
+			for i in Temp:
+				if i in DATA:
+					index=DATA[i].index(max(DATA[i]))
+					count[index]+=1
+					if len(Current_Top_Index)!=40:
+						Current_Top_Index.append(index)
+					else:
+						Current_Top_Index.pop(0)
+						Current_Top_Index.append(index)
+				else:
+					if len(Current_Top_Index)!=0:
+						mode=[0 for x in Current_Top_Index]
+						for i in range(len(Current_Top_Index)):
+							for j in range(len(Current_Top_Index)):
+								if Current_Top_Index[i]==Current_Top_Index[j]:
+									mode[i]+=1
+
+						count[Current_Top_Index[mode.index(max(mode))]]+=1
+
+			index=count.index(max(count))
+			Classification[Topics[index]].append(ID)
+
+
+
+
+	for topic in Topics:
+		for ID in Classification[topic]:
+			if ID in Ground_truth[topic]:
+				index=Topics.index(topic)
+				Algorithm_Docs_Count[index]+=1
+
+	for topic in Topics:
+		for ID in Ground_truth[topic]:
+			for topic_temp in Topics:
+				if ID in Classification[topic_temp]:
+					index=Topics.index(topic_temp)
+					Confusion_Matrix[topic][index]+=1
+
+	print "\n\n\nTopic Wise Accuracy\n"
+	print "Topics                   Algorithm Accuracy Per Topic"
+	K=0
+	accuracy=0
+	for topic in Topics:
+		print str(topic)+" "*(14-len(topic))+"                "+str((Algorithm_Docs_Count[K]/float(Ground_No_Of_Docs[topic]))*100)+" %"
+		accuracy=accuracy+(Algorithm_Docs_Count[K]/float(Ground_No_Of_Docs[topic]))*100
+		K+=1
+
+	print "\n\n\nConfusion Matrix\n"
+	print "Predicted - "+" ".join(Topics) +"\n"
+	for i in Topics:
+		print str(i)+" "*(14-len(i))+"     ".join(map(str,Confusion_Matrix[i]))
+
+	print "\n\n\nAlgorithm Accuracy"
+	Total_Documents=0
+	for i in Ground_No_Of_Docs:
+		Total_Documents=Total_Documents+Ground_No_Of_Docs[i]
+	print (sum(Algorithm_Docs_Count)/float(Total_Documents))*100
+
+
+
+def train(Data_Directory,Fraction):
+
+	DATA,count,Total_Documents,Topics,Num_Doc_Topic,suprivised_count={},0,0,[],[],0
+
+	Topics_Path=[names[0] for names in os.walk(os.path.join(Data_Directory,Mode))]
+	Model_F=open(Model_File,'w+')
+	Distinct_F=open('distinctive_words.txt','w+')
+
+	for path in Topics_Path[1:]:
+		Words=[]
+		print "Loading  "+str(path.split('/').pop())
+		Topics.append(path.split('/').pop())
+		[Document_ID for Document_ID in os.walk(path)]
+
+
+		for ID in Document_ID[2]:
+			Temp=[]
+			Document_F=open(os.path.join(path,ID), "r")
+			contents=Document_F.readlines()
+
+			if random.randint(0,1):                                    #Coin Flip
+				length=int(round(float(Fraction)*len(contents)))
+			else:
+				suprivised_count+=1
+				length=len(contents)-1
+
+			for i in range(len(contents[:length])):
+				Temp.extend(contents[i].split())
+			Temp=list(set(Temp))
+
+			for i in Temp:
+				if i not in DATA:
+					DATA[i]=[0 for x in range(20)]
+					DATA[i][len(Topics)-1]=1
+				else:
+					try:
+						DATA[i][len(Topics)-1]+=1
+					except IndexError:
+						DATA[i]=[0 for x in range(20)]
+						DATA[i][len(Topics)-1]=1
+
+			Document_F.close()
+		Total_Documents=Total_Documents+len(Document_ID[2])
+		Num_Doc_Topic.append(len(Document_ID[2]))
+
+    #Filter ---
+	unwanted=[]
+	for i in DATA:
+		if sum(DATA[i])>80:
+			unwanted.append(i)
+
+	for i in unwanted:
+		del DATA[i]
+	#---
+
+
+	Topics_Probability=[Num_Doc_Topic[i]/float(Total_Documents) for i in range(len(Num_Doc_Topic))]
+	Model_F.write(str(" ".join(Topics))+"\n")
+
+	print "\nTraining...!"
+	for i in DATA:
+		for x in range(len(Topics_Probability)):
+			DATA[i][x]=(DATA[i][x]/float(Num_Doc_Topic[x]))*Topics_Probability[x]
+		Model_F.write(str(i)+" "+" ".join([str(z) for z in DATA[i]])+"\n")
+
+	for x in Topics:
+		Probabilities=[]
+		Words=[]
+		Distinct_F.write(str(x)+"\n")
+		for i in DATA:
+			Probabilities.append(DATA[i][count])
+			Words.append(i)
+		for i in range(10):
+			index=Probabilities.index(max(Probabilities))
+			Distinct_F.write("   "+str(Words[index])+"\n")
+			Probabilities[index]=float('-inf')
+		count+=1
+
+	print "Traning is done."
+	print "In total %d number of documents have be trained." % (Total_Documents)
+	if float(Fraction)==1:
+		suprivised_count=Total_Documents
+	print "%d number of documents have been trained in a fully suprivised mode." % (suprivised_count)
+	Model_F.close()
+	Distinct_F.close()
+
+
+
+Mode,Data_Directory,Model_File=sys.argv[1],sys.argv[2],sys.argv[3]
+
+if Mode=='test':
+	test(Data_Directory)
+elif Mode=='train':
+	if float(sys.argv[4])==0:
+		train(Data_Directory,float(sys.argv[4])+0.00001)
+	else:
+		train(Data_Directory,sys.argv[4])
+else:
+	print "Invalid Arguments"
